@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking Musical</title>
+    <style>
+        body {
+            background-color: #ffcc00;
+            color: #b30000;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 80%;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            background: #b30000;
+            color: white;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: #b30000;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background: #ffee80;
+        }
+        tr:hover {
+            background: #ff6666;
+        }
+        img {
+            width: 60px;
+            height: 60px;
+            border-radius: 5px;
+        }
+        button {
+            background: #b30000;
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #800000;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Ranking Musical</h1>
+
+    <form id="song-form">
+        <input type="text" id="title" name="title" placeholder="Nome da Música" required>
+        <input type="text" id="artist" name="artist" placeholder="Nome do Artista" required>
+        <input type="number" id="weeks" name="weeks" placeholder="Semanas no Ranking" required>
+        <button type="button" id="addButton" onclick="addSong()">Adicionar Música</button>
+    </form>
+
+    <div class="container">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Capa</th>
+                    <th>Música</th>
+                    <th>Artista</th>
+                    <th>Semanas</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="song-list" ondrop="drop(event)" ondragover="allowDrop(event)">
+                {% for song in charts %}
+                <tr id="song-{{ song.position }}" draggable="true" ondragstart="drag(event)">
+                    <td>{{ song.position }}</td>
+                    <td>
+                        {% if song.album_cover %}
+                            <img src="{{ song.album_cover }}" alt="Capa do Álbum">
+                        {% else %}
+                            <img src="{{ url_for('static', filename='default_cover.png') }}" alt="Capa Padrão">
+                        {% endif %}
+                    </td>
+                    <td>{{ song.title }}</td>
+                    <td>{{ song.artist }}</td>
+                    <td>{{ song.weeks }}</td>
+                    <td>
+                        <button onclick="editSong({{ song.position }}, '{{ song.title }}', '{{ song.artist }}', {{ song.weeks }})">Editar</button>
+                        <button onclick="deleteSong({{ song.position }})">Excluir</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Função para permitir o evento drop
+        function allowDrop(ev) {
+            ev.preventDefault();
+        }
+
+        // Função chamada ao iniciar o drag
+        function drag(ev) {
+            ev.dataTransfer.setData("text", ev.target.id);
+        }
+
+        // Função chamada ao fazer o drop
+        function drop(ev) {
+            ev.preventDefault();
+            var data = ev.dataTransfer.getData("text");
+            var draggedRow = document.getElementById(data);
+            var targetRow = ev.target.closest('tr');
+            
+            if (targetRow && targetRow !== draggedRow) {
+                targetRow.parentNode.insertBefore(draggedRow, targetRow);
+                updateSongOrder();
+            }
+        }
+
+        // Função para atualizar a ordem no servidor
+        function updateSongOrder() {
+            const songs = document.querySelectorAll("#song-list tr");
+            const updatedPositions = [];
+
+            songs.forEach((song, index) => {
+                song.cells[0].textContent = index + 1;
+                updatedPositions.push({
+                    position: index + 1,
+                    id: song.id
+                });
+            });
+
+            fetch('/updateOrder', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ positions: updatedPositions })
+            }).then(response => {
+                if (!response.ok) {
+        
+                }
+            }).catch(error => {
+            
+            });
+        }
+
+        // Função para adicionar uma nova música
+        function addSong() {
+            const title = document.getElementById('title').value;
+            const artist = document.getElementById('artist').value;
+            const weeks = document.getElementById('weeks').value;
+            
+            const newSong = {
+                title: title,
+                artist: artist,
+                weeks: weeks
+            };
+
+            // Enviar dados via POST para o servidor
+            fetch('/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newSong)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Música adicionada com sucesso!');
+                    location.reload();  // Atualiza a página para exibir a nova música
+                } else {
+                    alert('Erro ao adicionar música!');
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao adicionar música!');
+            });
+        }
+
+        // Função para excluir uma música
+        function deleteSong(position) {
+            const row = document.getElementById('song-list').rows[position - 1];
+            row.remove();
+            updateSongOrder();
+        }
+
+        // Função para editar uma música
+        function editSong(position, title, artist, weeks) {
+            document.getElementById('title').value = title;
+            document.getElementById('artist').value = artist;
+            document.getElementById('weeks').value = weeks;
+            deleteSong(position); // Exclui para substituir
+        }
+    </script>
+
+</body>
+</html>
